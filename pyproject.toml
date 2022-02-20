@@ -8,6 +8,9 @@ authors = ["Zutatensuppe <oo.para@gmail.com>"]
 python = "^3.9"
 pywizlight = "^0.5.2"
 twitchio = "^2.1.4"
+opencv-python = "^4.5.5"
+Pillow = "^9.0.1"
+mss = "^6.1.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"
