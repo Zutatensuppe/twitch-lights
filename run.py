@@ -95,7 +95,6 @@ async def _handle_message(msg: str):
         brightness = lower_msg[11:]
         brightness = int(brightness)
         if brightness >= 0 and brightness <= 255:
-            last_manual_msg = msg
             await _turn_on(PilotBuilder(brightness=brightness, speed=1))
     elif lower_msg.startswith("scene "):
         scene = lower_msg[6:]
