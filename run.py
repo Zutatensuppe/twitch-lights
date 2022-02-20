@@ -35,47 +35,60 @@ def _light(light: str):
     )
 
 
-async def _turn_on(builder: PilotBuilder, light: Optional[str] = config.default_light):
+last_light_state = {
+    "rgb": None,
+    "brightness": None,
+    "scene": None,
+}
+
+
+async def _turn_on(
+    builder: PilotBuilder,
+    store: bool = True,
+    light: Optional[str] = config.default_light,
+):
     bulb = _light(light)
     if not bulb:
         return
     await bulb.turn_on(builder)
+    if store:
+        state = await bulb.updateState()
+        last_light_state["rgb"] = state.get_rgb()
+        last_light_state["brightness"] = state.get_brightness()
+        last_light_state["scene"] = state.get_scene()
 
 
-last_manual_msg = "!rgb 255 180 70"
-
-
-async def redo_last_manual_msg():
-    global last_manual_msg
-    log_debug(f"redo_last_manual_msg: {last_manual_msg}")
-    if last_manual_msg:
-        await _handle_message(last_manual_msg)
+async def restore_state():
+    if last_light_state["scene"]:
+        scene_id = scenes.get_id_from_scene_name(last_light_state["scene"])
+        await _turn_on(PilotBuilder(scene=scene_id), False)
+    elif last_light_state["rgb"]:
+        await _turn_on(PilotBuilder(rgb=last_light_state["rgb"]), False)
+    if last_light_state["brightness"]:
+        await _turn_on(PilotBuilder(brightness=last_light_state["brightness"]), False)
 
 
 async def _handle_message(msg: str):
-    global last_manual_msg
-
     lower_msg_full = msg.lower()
     if not lower_msg_full.startswith("!"):
         return
 
     if lower_msg_full.startswith("!sr bad"):
-        await _turn_on(PilotBuilder(rgb=(255, 0, 0)))
+        await _turn_on(PilotBuilder(rgb=(255, 0, 0), brightness=200), False)
         loop = asyncio.get_event_loop()
-        loop.call_later(3.0, loop.create_task, redo_last_manual_msg())
+        loop.call_later(3.0, loop.create_task, restore_state())
         return
 
     elif lower_msg_full.startswith("!sr good"):
-        await _turn_on(PilotBuilder(rgb=(0, 255, 0)))
+        await _turn_on(PilotBuilder(rgb=(0, 255, 0), brightness=200), False)
         loop = asyncio.get_event_loop()
-        loop.call_later(3.0, loop.create_task, redo_last_manual_msg())
+        loop.call_later(3.0, loop.create_task, restore_state())
         return
 
     # Above line of codes will not execute some_fn call as timer is cleared before 3 seconds
 
     lower_msg = lower_msg_full[1:]
     if lower_msg in config.named_colors:
-        last_manual_msg = msg
         await _turn_on(
             PilotBuilder(
                 rgb=config.named_colors[lower_msg]["rgb"],
@@ -89,7 +102,6 @@ async def _handle_message(msg: str):
         g = int(g)
         b = int(b)
         if r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255:
-            last_manual_msg = msg
             await _turn_on(PilotBuilder(rgb=(r, g, b), speed=1))
     elif lower_msg.startswith("brightness "):
         brightness = lower_msg[11:]
@@ -99,7 +111,6 @@ async def _handle_message(msg: str):
     elif lower_msg.startswith("scene "):
         scene = lower_msg[6:]
         if scene in config.named_scenes:
-            last_manual_msg = msg
             await _turn_on(
                 PilotBuilder(
                     rgb=config.named_scenes[scene]["rgb"],
@@ -112,7 +123,6 @@ async def _handle_message(msg: str):
         try:
             scene_id = scenes.get_id_from_scene_name(scene.capitalize())
             print(f"found scene_id {scene_id} for {scene.capitalize()}")
-            last_manual_msg = msg
             await _turn_on(PilotBuilder(scene=scene_id))
         except:
             # not found scene
