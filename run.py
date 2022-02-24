@@ -73,51 +73,45 @@ async def _handle_message(msg: str):
     if not lower_msg_full.startswith("!"):
         return
 
-    if lower_msg_full.startswith("!sr bad"):
-        await _turn_on(PilotBuilder(rgb=(255, 0, 0), brightness=200), False)
-        loop = asyncio.get_event_loop()
-        loop.call_later(3.0, loop.create_task, restore_state())
+    if lower_msg_full in config.exact_commands:
+        cmd = config.exact_commands[lower_msg_full]
+        if cmd["duration"]:
+            await _turn_on(cmd["builder"], False)
+            loop = asyncio.get_event_loop()
+            loop.call_later(cmd["duration"], loop.create_task, restore_state())
+        else:
+            await _turn_on(cmd["builder"])
         return
 
-    elif lower_msg_full.startswith("!sr good"):
-        await _turn_on(PilotBuilder(rgb=(0, 255, 0), brightness=200), False)
-        loop = asyncio.get_event_loop()
-        loop.call_later(3.0, loop.create_task, restore_state())
-        return
-
-    # Above line of codes will not execute some_fn call as timer is cleared before 3 seconds
-
-    lower_msg = lower_msg_full[1:]
-    if lower_msg in config.named_colors:
-        await _turn_on(
-            PilotBuilder(
-                rgb=config.named_colors[lower_msg]["rgb"],
-                brightness=config.named_colors[lower_msg]["brightness"],
-                speed=1,
-            )
-        )
-    elif lower_msg.startswith("rgb "):
-        (r, g, b) = lower_msg[4:].split(" ")
+    # handle RGB commands
+    cmd = config.rgb_command
+    if cmd and lower_msg_full.startswith(f"{cmd} "):
+        s = len(f"{cmd} ")
+        (r, g, b) = lower_msg_full[s:].split(" ")
         r = int(r)
         g = int(g)
         b = int(b)
         if r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255:
             await _turn_on(PilotBuilder(rgb=(r, g, b), speed=1))
-    elif lower_msg.startswith("brightness "):
-        brightness = lower_msg[11:]
+        return
+
+    # handle BRIGTHNESS commands
+    cmd = config.brightness_command
+    if cmd and lower_msg_full.startswith(f"{cmd} "):
+        s = len(f"{cmd} ")
+        brightness = lower_msg_full[s:]
         brightness = int(brightness)
         if brightness >= 0 and brightness <= 255:
             await _turn_on(PilotBuilder(brightness=brightness, speed=1))
-    elif lower_msg.startswith("scene "):
-        scene = lower_msg[6:]
+        return
+
+    # handle SCENE commands
+    cmd = config.scene_command
+    if cmd and lower_msg_full.startswith(f"{cmd} "):
+        s = len(f"{cmd} ")
+        scene = lower_msg_full[s:]
         if scene in config.named_scenes:
-            await _turn_on(
-                PilotBuilder(
-                    rgb=config.named_scenes[scene]["rgb"],
-                    brightness=config.named_scenes[scene]["brightness"],
-                    speed=1,
-                )
-            )
+            await _turn_on(config.named_scenes[scene])
             return
 
         try:
@@ -156,8 +150,9 @@ async def event_pubsub_bits(event: pubsub.PubSubBitsMessage):
 @client.event()
 async def event_pubsub_channel_points(event: pubsub.PubSubChannelPointsMessage):
     "Called every time there is a channel point redemption."
-    log_debug("event_pubsub_channel_points")
-    log_debug(event.reward.title)
+    log_debug("event_pubsub_channel_points: {event.reward.title}")
+    if event.reward.title in config.named_rewards:
+        await _turn_on(config.named_rewards[event.reward.title])
 
 
 @client.event()
@@ -174,8 +169,7 @@ async def event_message(ctx):
 
 
 async def main_task():
-    # await _handle_message("!rgb 255 255 255")
-    # await _handle_message("!brightness 255")
+    # await _turn_on(config.named_rewards["weiss"])
     topics = [
         pubsub.channel_points(users_oauth_token)[config.twitch_channel_id],
         pubsub.bits(users_oauth_token)[config.twitch_channel_id],
