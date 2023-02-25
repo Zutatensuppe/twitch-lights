@@ -42,7 +42,8 @@ exact_commands = {
                 "duration": 0.5,
                 "builder": PilotBuilder(rgb=(0, 0, 255), brightness=255),
             },
-        ]
+        ],
+        "duration": 3.0, # optional
     }
 }
 
