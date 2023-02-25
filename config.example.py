@@ -32,6 +32,18 @@ exact_commands = {
         "duration": 0,
         "builder": PilotBuilder(rgb=(255, 255, 255), brightness=255, speed=10),
     },
+    "!police": {
+        "loop": [
+            { # red
+                "duration": 0.5,
+                "builder": PilotBuilder(rgb=(255, 0, 0), brightness=255),
+            },
+            { # blue
+                "duration": 0.5,
+                "builder": PilotBuilder(rgb=(0, 0, 255), brightness=255),
+            },
+        ]
+    }
 }
 
 rgb_command = "!rgb"

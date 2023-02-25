@@ -21,6 +21,35 @@ def sig_handler(signum, frame) -> None:
     sys.exit(1)
 
 
+#### CUSTOM LOOP
+##########################################
+
+current_loop = { "actions": [], "idx": -1 }
+async def _next():
+    global current_loop
+    if len(current_loop["actions"]) == 0:
+        return
+    
+    current_loop["idx"]+=1
+    if current_loop["idx"] > (len(current_loop["actions"]) -1):
+        current_loop["idx"] = 0
+    cmd = current_loop["actions"][current_loop["idx"]]
+
+    await _turn_on(cmd['builder'], False)
+    loop = asyncio.get_event_loop()
+    loop.call_later(cmd["duration"], loop.create_task, _next())
+
+async def _start_loop(actions):
+    current_loop["actions"] = actions
+    current_loop["idx"] = -1
+    await _next()
+
+
+def _stop_loop():
+    current_loop["actions"] = []
+    current_loop["idx"] = -1
+
+
 #### LIGHT
 ##########################################
 
@@ -94,17 +123,22 @@ async def restore_state():
 
 
 async def _handle_message(msg: str):
+    global current_loop
     lower_msg_full = msg.lower()
     if not lower_msg_full.startswith("!"):
         return
 
     if lower_msg_full in config.exact_commands:
         cmd = config.exact_commands[lower_msg_full]
-        if cmd["duration"]:
+        if cmd["loop"]:
+            await _start_loop(cmd["loop"])
+        elif cmd["duration"]:
+            _stop_loop()
             await _turn_on(cmd["builder"], False)
             loop = asyncio.get_event_loop()
             loop.call_later(cmd["duration"], loop.create_task, restore_state())
         else:
+            _stop_loop()
             await _turn_on(cmd["builder"])
         return
 
@@ -117,6 +151,7 @@ async def _handle_message(msg: str):
         g = int(g)
         b = int(b)
         if r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255:
+            _stop_loop()
             print(f"Changing light rgb to: {r} {g} {b}")
             await _turn_on(PilotBuilder(rgb=(r, g, b), speed=10))
         return
@@ -137,6 +172,7 @@ async def _handle_message(msg: str):
             speed_new = int(speed)
 
         speed_new = min(200, max(20, speed_new))
+        _stop_loop()
         print(f"Changing effect speed: {speed_current} -> {speed_new}")
         await _set_effect_speed(speed_new)
         return
@@ -158,6 +194,7 @@ async def _handle_message(msg: str):
 
         brightness_new = min(255, max(0, brightness_new))
         print(f"Changing brightness: {brightness_current} -> {brightness_new}")
+        _stop_loop()
         await _turn_on(PilotBuilder(brightness=brightness_new, speed=10))
         return
 
@@ -167,12 +204,14 @@ async def _handle_message(msg: str):
         s = len(f"{cmd} ")
         scene = lower_msg_full[s:]
         if scene in config.named_scenes:
+            _stop_loop()
             await _turn_on(config.named_scenes[scene])
             return
 
         try:
             scene_id = scenes.get_id_from_scene_name(scene.capitalize())
             print(f"Changing to scene: {scene.capitalize()} ({scene_id})")
+            _stop_loop()
             await _turn_on(PilotBuilder(scene=scene_id))
         except:
             # not found scene
