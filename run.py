@@ -30,7 +30,6 @@ def _light(light: str):
         return None
     return wizlight(
         ip=config.lights[light].get("ip"),
-        connect_on_init=True,
         port=config.lights[light].get("port", 38899),
     )
 
@@ -40,6 +39,32 @@ last_light_state = {
     "brightness": None,
     "scene": None,
 }
+
+
+async def _current_brightness(light: Optional[str] = config.default_light):
+    bulb = _light(light)
+    if not bulb:
+        return None
+    state = await bulb.updateState()
+    return state.get_brightness()
+
+
+async def _current_speed(light: Optional[str] = config.default_light):
+    bulb = _light(light)
+    if not bulb:
+        return None
+    state = await bulb.updateState()
+    return state.get_speed()
+
+
+async def _set_effect_speed(
+    speed: int,
+    light: Optional[str] = config.default_light,
+):
+    bulb = _light(light)
+    if not bulb:
+        return
+    await bulb.set_speed(speed)
 
 
 async def _turn_on(
@@ -92,17 +117,48 @@ async def _handle_message(msg: str):
         g = int(g)
         b = int(b)
         if r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255:
-            await _turn_on(PilotBuilder(rgb=(r, g, b), speed=1))
+            print(f"Changing light rgb to: {r} {g} {b}")
+            await _turn_on(PilotBuilder(rgb=(r, g, b), speed=10))
         return
 
+    # handle SPEED commands
+    cmd = config.speed_command
+    if cmd and lower_msg_full.startswith(f"{cmd} "):
+        speed_current = await _current_speed()
+        if not speed_current:
+            print("unable to determine current speed.. cant change speed")
+            return
+    
+        s = len(f"{cmd} ")
+        speed = lower_msg_full[s:]
+        if speed.startswith('-') or speed.startswith('+'):
+            speed_new = speed_current + int(speed)
+        else:
+            speed_new = int(speed)
+
+        speed_new = min(200, max(20, speed_new))
+        print(f"Changing effect speed: {speed_current} -> {speed_new}")
+        await _set_effect_speed(speed_new)
+        return
+    
     # handle BRIGTHNESS commands
     cmd = config.brightness_command
     if cmd and lower_msg_full.startswith(f"{cmd} "):
+        brightness_current = await _current_brightness()
+        if not brightness_current:
+            print("unable to determine current brightness.. cant change brightness")
+            return
+
         s = len(f"{cmd} ")
         brightness = lower_msg_full[s:]
-        brightness = int(brightness)
-        if brightness >= 0 and brightness <= 255:
-            await _turn_on(PilotBuilder(brightness=brightness, speed=1))
+        if brightness.startswith('-') or brightness.startswith('+'):
+            brightness_new = brightness_current + int(brightness)
+        else:
+            brightness_new = int(brightness)
+
+        brightness_new = min(255, max(0, brightness_new))
+        print(f"Changing brightness: {brightness_current} -> {brightness_new}")
+        await _turn_on(PilotBuilder(brightness=brightness_new, speed=10))
         return
 
     # handle SCENE commands
@@ -116,7 +172,7 @@ async def _handle_message(msg: str):
 
         try:
             scene_id = scenes.get_id_from_scene_name(scene.capitalize())
-            print(f"found scene_id {scene_id} for {scene.capitalize()}")
+            print(f"Changing to scene: {scene.capitalize()} ({scene_id})")
             await _turn_on(PilotBuilder(scene=scene_id))
         except:
             # not found scene
@@ -134,7 +190,7 @@ client = commands.Bot(
     token=config.twitch_oauth_token,
     client_id="",
     nick=config.twitch_username,
-    prefix="!",
+    prefix="!IGNOREME",
     initial_channels=[config.twitch_channel],
 )
 client.pubsub = pubsub.PubSubPool(client)

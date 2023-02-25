@@ -13,10 +13,11 @@ from pywizlight import PilotBuilder
 #   wizlight discover --b 192.168.13.255
 #
 lights = {
-    "desk": {"ip": "192.168.1.13"},
-    "kitchen": {"ip": "192.168.1.14"},
+    "desk": {"ip": "192.168.1.69"},
+    "kitchen": {"ip": "192.168.1.70"},
 }
-default_light = "kitchen"
+
+default_light = "desk"
 
 exact_commands = {
     "!blue": {
@@ -29,19 +30,19 @@ exact_commands = {
     },
     "!white": {
         "duration": 0,
-        "builder": PilotBuilder(rgb=(255, 255, 255), brightness=255, speed=1),
+        "builder": PilotBuilder(rgb=(255, 255, 255), brightness=255, speed=10),
     },
 }
-
 
 rgb_command = "!rgb"
 brightness_command = "!brightness"
 scene_command = "!scene"
+speed_command = "!speed"
 
 named_scenes = {
-    "kirino": PilotBuilder(rgb=(180, 80, 120), brightness=80, speed=1),
-    "tvarynka": PilotBuilder(rgb=(0, 0, 255), brightness=100, speed=1),
-    "baker-miller pink": PilotBuilder(rgb=(255, 145, 175), brightness=69, speed=1),
+    "kirino": PilotBuilder(rgb=(180, 80, 120), brightness=80, speed=10),
+    "tvarynka": PilotBuilder(rgb=(0, 0, 255), brightness=100, speed=10),
+    "baker-miller pink": PilotBuilder(rgb=(255, 145, 175), brightness=69, speed=10),
 }
 
 named_rewards = {
@@ -56,11 +57,11 @@ named_rewards = {
 # chat bot
 twitch_username = "nc_para_"  #
 twitch_channel = "nc_para_"  #
-twitch_oauth_token = os.environ["TWITCH_OAUTH_TOKEN"] or ""  #
+twitch_oauth_token = ""  #
 
 # required for channel points + bits
 twitch_channel_id = 26851026
-twitch_oauth_token_x = os.environ["TWITCH_OAUTH_TOKEN_X"] or ""
+twitch_oauth_token_x = ""
 
 
 debug = True
