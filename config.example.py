@@ -32,7 +32,7 @@ exact_commands = {
         "duration": 0,
         "builder": PilotBuilder(rgb=(255, 255, 255), brightness=255, speed=10),
     },
-    "!police": {
+    "!scene police": {
         "loop": [
             { # red
                 "duration": 0.5,
