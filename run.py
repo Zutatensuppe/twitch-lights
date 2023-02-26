@@ -119,6 +119,15 @@ async def _store_current_state(
     # todo: store/restore custom_scene
 
 
+async def _turn_off(
+    light: Optional[str] = config.default_light,
+):
+    bulb = _light(light)
+    if not bulb:
+        return
+    await bulb.turn_off()
+
+
 async def _turn_on(
     builder: PilotBuilder,
     store: bool = True,
@@ -150,7 +159,14 @@ async def _handle_message(msg: str):
 
     if lower_msg_full in config.exact_commands:
         cmd = config.exact_commands[lower_msg_full]
-        if "loop" in cmd:
+        if "off" in cmd:
+            await _turn_off()
+            if "duration" in cmd:
+                _stop_custom_scene()
+                await _store_current_state()
+                loop = asyncio.get_event_loop()
+                loop.call_later(cmd["duration"], loop.create_task, restore_state())
+        elif "loop" in cmd:
             await _start_custom_scene(cmd)
         elif "duration" in cmd:
             _stop_custom_scene()

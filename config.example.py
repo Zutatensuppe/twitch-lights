@@ -44,7 +44,11 @@ exact_commands = {
             },
         ],
         "duration": 3.0, # optional
-    }
+    },
+    "!off": {
+        "off": True,
+        "duration": 5.0, # optional
+    },
 }
 
 rgb_command = "!rgb"
