@@ -272,7 +272,6 @@ async def _handle_message(msg: str):
 
 my_token = config.twitch_oauth_token
 users_oauth_token = config.twitch_oauth_token_x
-users_channel_id = config.twitch_channel_id
 
 client = commands.Bot(
     token=config.twitch_oauth_token,
