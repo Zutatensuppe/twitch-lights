@@ -27,5 +27,5 @@
 4. Run the script
 
     ```console
-    poetry run poetry run.py
+    poetry run python run.py
     ```
