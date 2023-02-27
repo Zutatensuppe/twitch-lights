@@ -312,12 +312,14 @@ async def event_message(ctx):
 
 
 async def main_task():
+    log_debug(f"Starting up, please wait...")
     # await _turn_on(config.named_rewards["weiss"])
-    topics = [
-        pubsub.channel_points(users_oauth_token)[config.twitch_channel_id],
-        pubsub.bits(users_oauth_token)[config.twitch_channel_id],
-    ]
-    await client.pubsub.subscribe_topics(topics)
+    if users_oauth_token:
+        topics = [
+            pubsub.channel_points(users_oauth_token)[config.twitch_channel_id],
+            pubsub.bits(users_oauth_token)[config.twitch_channel_id],
+        ]
+        await client.pubsub.subscribe_topics(topics)
     await client.connect()
 
 
