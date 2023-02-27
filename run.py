@@ -43,8 +43,8 @@ async def _next():
 async def _start_custom_scene(custom_scene_settings):
     custom_scene["actions"] = custom_scene_settings["loop"]
     custom_scene["idx"] = -1
-    await _next()
     await _store_current_state()
+    await _next()
     if "duration" in custom_scene_settings:
         loop = asyncio.get_event_loop()
         loop.call_later(custom_scene_settings["duration"], loop.create_task, _stop_custom_scene_and_restore_state())
@@ -77,6 +77,7 @@ last_light_state = {
     "rgb": None,
     "brightness": None,
     "scene": None,
+    "cold_whitecold_white": None,
 }
 
 
@@ -112,10 +113,12 @@ async def _store_current_state(
     bulb = _light(light)
     if not bulb:
         return
+    log_debug("storing current light state")
     state = await bulb.updateState()
     last_light_state["rgb"] = state.get_rgb()
     last_light_state["brightness"] = state.get_brightness()
     last_light_state["scene"] = state.get_scene()
+    last_light_state["cold_white"] = state.get_cold_white()
     # todo: store/restore custom_scene
 
 
@@ -142,13 +145,22 @@ async def _turn_on(
 
 
 async def restore_state():
+    restored = []
     if last_light_state["scene"]:
         scene_id = scenes.get_id_from_scene_name(last_light_state["scene"])
         await _turn_on(PilotBuilder(scene=scene_id), False)
+        restored.append('scene')
     elif last_light_state["rgb"]:
         await _turn_on(PilotBuilder(rgb=last_light_state["rgb"]), False)
+        restored.append('rgb')
+
     if last_light_state["brightness"]:
         await _turn_on(PilotBuilder(brightness=last_light_state["brightness"]), False)
+        restored.append('brightness')
+    if last_light_state["cold_white"]:
+        await _turn_on(PilotBuilder(cold_white=last_light_state["cold_white"]), False)
+        restored.append('cold_white')
+    log_debug(f"restored light state: {', '.join(restored)}")
 
 
 async def _handle_message(msg: str):
@@ -189,7 +201,7 @@ async def _handle_message(msg: str):
         b = int(b)
         if r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255:
             _stop_custom_scene()
-            print(f"Changing light rgb to: {r} {g} {b}")
+            log_debug(f"Changing light rgb to: {r} {g} {b}")
             await _turn_on(PilotBuilder(rgb=(r, g, b), speed=10))
         return
 
@@ -198,7 +210,7 @@ async def _handle_message(msg: str):
     if cmd and lower_msg_full.startswith(f"{cmd} "):
         speed_current = await _current_speed()
         if not speed_current:
-            print("unable to determine current speed.. cant change speed")
+            log_debug("unable to determine current speed.. cant change speed")
             return
     
         s = len(f"{cmd} ")
@@ -210,7 +222,7 @@ async def _handle_message(msg: str):
 
         speed_new = min(200, max(20, speed_new))
         _stop_custom_scene()
-        print(f"Changing effect speed: {speed_current} -> {speed_new}")
+        log_debug(f"Changing effect speed: {speed_current} -> {speed_new}")
         await _set_effect_speed(speed_new)
         return
     
@@ -219,7 +231,7 @@ async def _handle_message(msg: str):
     if cmd and lower_msg_full.startswith(f"{cmd} "):
         brightness_current = await _current_brightness()
         if not brightness_current:
-            print("unable to determine current brightness.. cant change brightness")
+            log_debug("unable to determine current brightness.. cant change brightness")
             return
 
         s = len(f"{cmd} ")
@@ -230,7 +242,7 @@ async def _handle_message(msg: str):
             brightness_new = int(brightness)
 
         brightness_new = min(255, max(0, brightness_new))
-        print(f"Changing brightness: {brightness_current} -> {brightness_new}")
+        log_debug(f"Changing brightness: {brightness_current} -> {brightness_new}")
         _stop_custom_scene()
         await _turn_on(PilotBuilder(brightness=brightness_new, speed=10))
         return
@@ -247,7 +259,7 @@ async def _handle_message(msg: str):
 
         try:
             scene_id = scenes.get_id_from_scene_name(scene.capitalize())
-            print(f"Changing to scene: {scene.capitalize()} ({scene_id})")
+            log_debug(f"Changing to scene: {scene.capitalize()} ({scene_id})")
             _stop_custom_scene()
             await _turn_on(PilotBuilder(scene=scene_id))
         except:

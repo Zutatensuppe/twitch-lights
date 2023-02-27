@@ -29,8 +29,10 @@ exact_commands = {
         "builder": PilotBuilder(rgb=(255, 0, 0), brightness=255),
     },
     "!white": {
-        "duration": 0,
         "builder": PilotBuilder(rgb=(255, 255, 255), brightness=255, speed=10),
+    },
+    "!coldwhite": {
+        "builder": PilotBuilder(rgb=(255, 255, 255), brightness=255, cold_white=255),
     },
     "!scene police": {
         "loop": [
