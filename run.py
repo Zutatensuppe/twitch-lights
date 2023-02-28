@@ -8,6 +8,11 @@ import sys
 from pywizlight import scenes, PilotBuilder, wizlight
 from twitchio.ext import commands, pubsub
 
+# hardware limitations
+MIN_EFFECT_SPEED = 20
+MAX_EFFECT_SPEED = 200
+DEFAULT_EFFECT_SPEED = 110
+
 #### HELPERS
 ##########################################
 
@@ -24,7 +29,14 @@ def sig_handler(signum, frame) -> None:
 #### CUSTOM SCENE
 ##########################################
 
-custom_scene = { "actions": [], "idx": -1, "brightness": None }
+def _get_custom_speed_factor(value) -> float:
+    if value <= 110:
+        return (value - 20) / (110 - 20) * (1.00 - 5.00) + 5.00
+    else:
+        return (value - 110) / (200 - 110) * (0.05 - 1.00) + 1.00
+
+
+custom_scene = { "actions": [], "idx": -1, "brightness": None, "speed": None }
 async def _next():
     global custom_scene
     if len(custom_scene["actions"]) == 0:
@@ -39,7 +51,12 @@ async def _next():
         cmd['builder']._set_brightness(custom_scene["brightness"])
     await _turn_on(cmd['builder'], False)
     loop = asyncio.get_event_loop()
-    loop.call_later(cmd["duration"], loop.create_task, _next())
+
+    duration = cmd["duration"]
+    if custom_scene["speed"] != None:
+        factor = _get_custom_speed_factor(custom_scene["speed"])
+        duration *= factor
+    loop.call_later(duration, loop.create_task, _next())
 
 
 async def _start_custom_scene(custom_scene_settings):
@@ -47,6 +64,7 @@ async def _start_custom_scene(custom_scene_settings):
     custom_scene["actions"] = custom_scene_settings["loop"]
     custom_scene["idx"] = -1
     custom_scene["brightness"] = None
+    custom_scene["speed"] = None
     await _store_current_state()
     await _next()
     if "duration" in custom_scene_settings:
@@ -64,6 +82,7 @@ def _stop_custom_scene():
     custom_scene["actions"] = []
     custom_scene["idx"] = -1
     custom_scene["brightness"] = None
+    custom_scene["speed"] = None
 
 
 def _is_custom_scene() -> bool:
@@ -76,6 +95,15 @@ async def _adjust_custom_scene_brightness(brightness: int):
     custom_scene["brightness"] = brightness
     await _turn_on(PilotBuilder(brightness=brightness, speed=10), False)
 
+
+async def _current_custom_scene_speed() -> float:
+    global custom_scene
+    return DEFAULT_EFFECT_SPEED if custom_scene["speed"] == None else custom_scene["speed"]
+
+
+async def _adjust_custom_scene_speed(speed: int):
+    global custom_scene
+    custom_scene["speed"] = speed
 
 
 #### LIGHT
@@ -226,22 +254,34 @@ async def _handle_message(msg: str):
     # handle SPEED commands
     cmd = config.speed_command
     if cmd and lower_msg_full.startswith(f"{cmd} "):
-        speed_current = await _current_speed()
-        if not speed_current:
-            log_debug("unable to determine current speed.. cant change speed")
-            return
-    
-        s = len(f"{cmd} ")
-        speed = lower_msg_full[s:]
-        if speed.startswith('-') or speed.startswith('+'):
-            speed_new = speed_current + int(speed)
-        else:
-            speed_new = int(speed)
+        if _is_custom_scene():
+            speed_current = await _current_custom_scene_speed()
+            s = len(f"{cmd} ")
+            speed = lower_msg_full[s:]
+            if speed.startswith('-') or speed.startswith('+'):
+                speed_new = speed_current + int(speed)
+            else:
+                speed_new = int(speed)
 
-        speed_new = min(200, max(20, speed_new))
-        _stop_custom_scene()
-        log_debug(f"Changing effect speed: {speed_current} -> {speed_new}")
-        await _set_effect_speed(speed_new)
+            speed_new = min(MAX_EFFECT_SPEED, max(MIN_EFFECT_SPEED, speed_new))
+            log_debug(f"Changing effect speed: {speed_current} -> {speed_new}")
+            await _adjust_custom_scene_speed(speed_new)
+        else:
+            speed_current = await _current_speed()
+            if not speed_current:
+                log_debug("unable to determine current speed.. cant change speed")
+                return
+        
+            s = len(f"{cmd} ")
+            speed = lower_msg_full[s:]
+            if speed.startswith('-') or speed.startswith('+'):
+                speed_new = speed_current + int(speed)
+            else:
+                speed_new = int(speed)
+
+            speed_new = min(MAX_EFFECT_SPEED, max(MIN_EFFECT_SPEED, speed_new))
+            log_debug(f"Changing effect speed: {speed_current} -> {speed_new}")
+            await _set_effect_speed(speed_new)
         return
     
     # handle BRIGTHNESS commands
@@ -277,14 +317,18 @@ async def _handle_message(msg: str):
             await _turn_on(config.named_scenes[scene])
             return
 
-        try:
-            scene_id = scenes.get_id_from_scene_name(scene.capitalize())
+        scene_id = _get_id_from_scene_name(scene)
+        if scene_id:
             log_debug(f"Changing to scene: {scene.capitalize()} ({scene_id})")
             _stop_custom_scene()
             await _turn_on(PilotBuilder(scene=scene_id))
-        except:
-            # not found scene
-            pass
+
+
+def _get_id_from_scene_name(scene: str) -> int:
+    for (scene_id, scene_name) in scenes.SCENES.items():
+        if scene.lower() == scene_name.lower():
+            return scene_id
+    return 0
 
 
 #### PUBSUB + BOT
