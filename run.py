@@ -24,7 +24,7 @@ def sig_handler(signum, frame) -> None:
 #### CUSTOM SCENE
 ##########################################
 
-custom_scene = { "actions": [], "idx": -1 }
+custom_scene = { "actions": [], "idx": -1, "brightness": None }
 async def _next():
     global custom_scene
     if len(custom_scene["actions"]) == 0:
@@ -35,14 +35,18 @@ async def _next():
         custom_scene["idx"] = 0
     cmd = custom_scene["actions"][custom_scene["idx"]]
 
+    if custom_scene["brightness"] != None:
+        cmd['builder']._set_brightness(custom_scene["brightness"])
     await _turn_on(cmd['builder'], False)
     loop = asyncio.get_event_loop()
     loop.call_later(cmd["duration"], loop.create_task, _next())
 
 
 async def _start_custom_scene(custom_scene_settings):
+    global custom_scene
     custom_scene["actions"] = custom_scene_settings["loop"]
     custom_scene["idx"] = -1
+    custom_scene["brightness"] = None
     await _store_current_state()
     await _next()
     if "duration" in custom_scene_settings:
@@ -56,8 +60,22 @@ async def _stop_custom_scene_and_restore_state():
 
 
 def _stop_custom_scene():
+    global custom_scene
     custom_scene["actions"] = []
     custom_scene["idx"] = -1
+    custom_scene["brightness"] = None
+
+
+def _is_custom_scene() -> bool:
+    global custom_scene
+    return len(custom_scene["actions"]) > 0
+
+
+async def _adjust_custom_scene_brightness(brightness: int):
+    global custom_scene
+    custom_scene["brightness"] = brightness
+    await _turn_on(PilotBuilder(brightness=brightness, speed=10), False)
+
 
 
 #### LIGHT
@@ -243,8 +261,10 @@ async def _handle_message(msg: str):
 
         brightness_new = min(255, max(0, brightness_new))
         log_debug(f"Changing brightness: {brightness_current} -> {brightness_new}")
-        _stop_custom_scene()
-        await _turn_on(PilotBuilder(brightness=brightness_new, speed=10))
+        if _is_custom_scene():
+            await _adjust_custom_scene_brightness(brightness_new)
+        else:
+            await _turn_on(PilotBuilder(brightness=brightness_new, speed=10))
         return
 
     # handle SCENE commands
